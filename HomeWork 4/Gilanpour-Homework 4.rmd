@@ -1,0 +1,360 @@
+---
+title: 'Homework #4'
+author: "Azadeh Glanpour"
+date: "September 28, 2018"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include=FALSE}
+library(mlbench)
+library(corrplot)
+library(ggplot2)
+library(GGally)
+library(VIM)
+library(robustbase)
+library(ggbiplot)
+library(reshape2)
+library(Amelia)
+library(lattice)    
+library("car")        #<-- used to get Prestige dataset; and 'symbox' function
+library("EnvStats")   #<-- used to get "boxcox" function
+library(MASS)
+library(mice)
+library(randomForest)
+library(stats)
+library(caret)
+library(forcats)
+```
+
+## Problem 1
+### 1a)
+```{r}
+# Load data from the package "mlbench"
+data(Glass)       
+```
+
+Some of ions like *Mg*, *Ba*, and *Fe* have values of zero. Looking into chemistry of the glasses releavs that these ions are not essential part of the glasses, but they carries some identifications such as color of galss. Therefore; they would be very useful to classify the glasses as we have a variable as type.
+```{r, include=FALSE}
+str(Glass)        # Take a look at data structure
+head(Glass)
+summary(Glass)
+```
+
+
+```{r}
+
+pairs(Glass[1:9], main = "Glass Data Visualization", pch=21, bg = Glass$Type )
+```
+```{r}
+# Histogram - separated
+par(mfrow=c(3,3))               
+hist(Glass$RI, main="Refractive Index", xlab="Refractive Index",col="blue")
+hist(Glass$Na, main="Sodium", xlab="Sodium percentage",col="green")
+hist(Glass$Mg, main="Magnesium", xlab="Magnesium Percentage",col="red")
+hist(Glass$Al, main="Aluminum", xlab="Aluminum Percentage",col="orange")
+hist(Glass$Si, main="Silicon", xlab="Silicon Percentage",col="yellow")
+hist(Glass$K,  main="Potassium", xlab="Potassium Percentage",col="pink")
+hist(Glass$Ca, main="Calcium", xlab="Calcium Percentage",col = "purple")
+hist(Glass$Ba, main="Barium", xlab="Barium Percentage",col="brown")
+hist(Glass$Fe, main="Iron", xlab="Iron Percentage",col = "gray")
+```
+
+```{r}
+# Check the correlations
+correalation<-cor(Glass[,1:9],method = "kendall")
+correalation<-cor(Glass[,1:9],method = "pearson")
+correalation<-cor(Glass[,1:9],method = "spearman")
+corrplot(correalation)
+# Breif view for binary scatter
+scattmatrixMiss(Glass[,1:9])    
+```
+
+```{r}
+Glass.melt<- melt(Glass)
+par(mfrow=c(3,3)) 
+ggplot(Glass.melt[Glass.melt$variable=="RI",], aes(x=value, fill=Type)) + geom_density(alpha=0.45) + labs(x="Refractive Index")
+ggplot(Glass.melt[Glass.melt$variable=="Na",], aes(x=value, fill=Type)) + geom_density(alpha=0.45) + labs(x="Sodium Percentage")
+ggplot(Glass.melt[Glass.melt$variable=="Mg",], aes(x=value, fill=Type)) + geom_density(alpha=0.45) + labs(x="Magnesium Percentage")
+ggplot(Glass.melt[Glass.melt$variable=="Al",], aes(x=value, fill=Type)) + geom_density(alpha=0.45) + labs(x="Aluminum Percentage")
+ggplot(Glass.melt[Glass.melt$variable=="Si",], aes(x=value, fill=Type)) + geom_density(alpha=0.45) + labs(x="Silicon Percentage")
+ggplot(Glass.melt[Glass.melt$variable=="K", ], aes(x=value, fill=Type)) + geom_density(alpha=0.45) + labs(x="Potassium Percentage")
+ggplot(Glass.melt[Glass.melt$variable=="Ca",], aes(x=value, fill=Type)) + geom_density(alpha=0.45) + labs(x="Calcium Percentage")
+ggplot(Glass.melt[Glass.melt$variable=="Ba",], aes(x=value, fill=Type)) + geom_density(alpha=0.45) + labs(x="Barium Percentage")
+ggplot(Glass.melt[Glass.melt$variable=="Fe",], aes(x=value, fill=Type)) + geom_density(alpha=0.45) + labs(x="Iron Percentage")
+```
+
+
+```{r}
+# Boxplots
+par(mfrow=c(3,3))                # Divides the screen into three sections
+boxplot(data=Glass, RI ~ Type, xlab = "Type", ylab = "RI")
+boxplot(data=Glass, Na ~ Type, xlab = "Type", ylab = "Na")
+boxplot(data=Glass, Mg ~ Type, xlab = "Type", ylab = "Mg")
+boxplot(data=Glass, Al ~ Type, xlab = "Type", ylab = "Al")
+boxplot(data=Glass, Si ~ Type, xlab = "Type", ylab = "Si")
+boxplot(data=Glass, K ~ Type, xlab = "Type", ylab = "K")
+boxplot(data=Glass, Ca ~ Type, xlab = "Type", ylab = "Ca")
+boxplot(data=Glass, Ba ~ Type, xlab = "Type", ylab = "Ba")
+boxplot(data=Glass, Fe ~ Type, xlab = "Type", ylab = "Fe")             
+```
+
+```{r}
+
+ggplot(data=Glass, aes(x=Ca,y=RI))+ geom_point(aes(fill=Type), alpha=I(.75), colour="black", pch=21, size=5)+
+labs(x="Calcium",y="Refractive Index") 
+```
+
+```{r}
+ggpairs(Glass, lower=list(continuous="smooth"),axisLabels='show')
+```
+
+Some tecniques were applied to investigate the distribution, and the relationship between the predictor variables. The following picture shows that there are not exist strong linear relationship between the predictors except ***Refractive Index*** and ***Calcium***. This implies that "calcium" and "reflactive index" are correlated and we may use one of them or combination of them as a single predictor which one is easier. 
+
+The weak linear relationship between predictors never deny existance of nonlinear correlations. Visualization helps us to realize whether any pattern is available in plotted data. By looking at the plots, I would say some nonlinear correlations could be discovered between ***Aluminum*** and ***Calcium*** or ***Sodium***.
+
+Moderate linear correlations either negative or positive are aviable between these pairs: *RI/Si*, *Mg/Al*, *Mg/Ba*, *Ba/Al*, and *RI/Al*.
+
+```{r}
+Ion = c("RI", "Na", "Mg", "Al", "Si", "K", "Ca", "Ba", "Fe")    # Ion vector
+par(mfrow=c(3,3))
+for (i in Ion){
+  adjbox(data=Glass, RI ~ Type, xlab="Type", ylab=i, main="Adjusted")}
+
+```
+Adjusted box plots shows there is some outliers in data set.Type 2 has a lot of high outliers values. Type 5 has a wide range of values while type 6 and 7 have a very narrow.
+
+```{r}
+apply(Glass[,1:9], 2, skewness)
+```
+Skewness for predicors were calculated. It shows that some predictors are highly skewed
+
+
+### 1b)
+
+As described above Fe, Ba and K are highly skewed and will benefit from transformation. Because there are zero data there we can produce a very small shift in our data
+```{r}
+par(mfrow=c(3,3))
+symbox(Glass$Fe, start=1e-10, data=Glass, powers=c(1,0.5,0.25,0,-0.5,-1))
+symbox(Glass$Ba, start=1e-10, data=Glass, powers=c(1,0.5,0.25,0,-0.5,-1))
+symbox(Glass$K, start=1e-10, data=Glass, powers=c(1,0.5,0.25,0,-0.5,-1))              # Reset display
+
+logGlass = log(Glass[,1:9]+1e-12)
+logGlass$Type = Glass$Type
+# melt the variable
+logGlass2 = melt(logGlass)
+#Ion2 = c("RI", "Na", "Mg", "Al", "Si", "K", "Ca", "Ba", "Fe")
+par(mfrow=c(3,3))
+for (i in Ion) {
+  print(ggplot(logGlass2[logGlass2$variable == i,], aes(x=value, fill=Type)) +
+          geom_density(alpha=0.45) +        #set geometry and transparency    
+          labs(x = "Ion Concentration",          #set x-label and title
+               title = paste ("Densities for", i, "Ions of Glass Types")))
+}
+```
+
+```{r}
+lambda.opt <- rep(1, 9)
+names(lambda.opt) <- names(Glass[,1:9])
+for (i in 2:9) {
+  a <- EnvStats::boxcox(Glass[,i]+1e-27, optimize = TRUE, lambda=c(-10,10))    # if optimize = TRUE, then you must tell the function the 
+  lambda.opt[i] <- a$lambda
+}
+lambda.opt
+```
+* Optimum values of lambda are numbers with decimal points. It is very important to select a rounded number which could describe the model physically. Noises and erorrs involved in data collection and registration may suggest this values mathematically but I think thatit is better to select more logical and simple model.
+
+###(c)
+```{r}
+Glass.PCA<-prcomp(Glass[,1:9],scale=TRUE)
+```
+
+```{r,include=FALSE}
+Glass.PCA
+```
+
+
+```{r}
+
+plot(Glass.PCA)
+summary(Glass.PCA)
+par(mfrow=c(1,2))               # Divides the screen into three sections
+ggbiplot(Glass.PCA,obs.scale = 1, var.scale = 1, circle = TRUE, choices = c(1,2))
+ggbiplot(Glass.PCA,obs.scale = 1, var.scale = 1, circle = TRUE, choices = c(1,5))
+
+```
+
+Pricipal component analysis shows that, we can reduce the dimension from 9 variables into 5 variables keeping about 90% of the variance of data. More investigation on the data and PCs by *ggbiplot* indicates that ***Silisium***, ***Calcium***, and ***Refractive Index*** narates smae story and could be collaped on a single component. They may have different direction but are in same line.
+
+###(d)
+```{r, include=FALSE}
+fit.LDA <- lda(formula = Type ~ ., data = Glass)   # The function lda on the Glass types
+fit.LDA
+fit.predict <- predict(fit.LDA, newdata=Glass[,1:9])$class
+table(fit.predict, Glass[,10])
+```
+
+PCA is an unsupervised method which reduces the problem dimensions keeping data variance as much as possible. On the other hand, LDA is a supervised method which uses the given data to produce a simpler and more accurate model. Here, in our data, table shows that LDA did a very good job in classification of group 7, but its performance was tribble in group 3. For other gruops, the result could acceptale depending on our desire.
+
+##Problem 2 :Missing Data
+```{r}
+# Load data from the package "Amelia"
+data(freetrade)   
+```
+
+###(a)
+The code for regression using listwise deletetion
+```{r, include=FALSE}
+freetrade.LD <- na.omit(freetrade)  #listwise deletion
+freetrade.LD.fit <- lm(data = freetrade.LD,
+                   tariff~year+country+polity+pop+gdp.pc+intresmi+signed+fiveop+usheg) #Linear regression
+
+summary(freetrade.LD.fit)
+sf.a <- summary(freetrade.LD.fit)
+coef.a <- sf.a[[4]]
+se.a <- sf.a[[6]]
+```
+
+###(b)
+Following code was provided to perform regression after using mean imputation:
+```{r}
+freetrade.mimp <- freetrade
+freetrade.mimp[is.na(freetrade.mimp$tariff), "tariff"] <- mean(freetrade.mimp$tariff,na.rm=T)
+freetrade.mimp[is.na(freetrade.mimp$polity), "polity"] <- mean(freetrade.mimp$polity,na.rm=T)
+freetrade.mimp[is.na(freetrade.mimp$intresmi), "intresmi"] <- mean(freetrade.mimp$intresmi,na.rm=T)
+freetrade.mimp[is.na(freetrade.mimp$signed), "signed"] <- mean(freetrade.mimp$signed,na.rm=T)
+freetrade.mimp[is.na(freetrade.mimp$fiveop), "fiveop"] <- mean(freetrade.mimp$fiveop,na.rm=T)
+
+freetrade.mimp.fit <- lm(data=freetrade.mimp, 
+                         tariff ~ year + country + polity + pop + gdp.pc + intresmi + signed + fiveop + usheg)
+
+```
+
+```{r, include=FALSE}
+summary(freetrade.mimp.fit)
+sf.b <- summary(freetrade.mimp.fit)
+coef.b <- sf.b[[4]]
+se.b <- sf.b[[6]]
+```
+
+
+
+###(C)
+Following code was provided to perform regression after using multiple imputation. Different methods such as *mean*, *rf*, *sample*, and *cart*. The lastest one has been used to perform regression.
+```{r, include=FALSE}
+#freetrade.MI <- mice(freetrade, m=5, maxit=10, method="mean")
+#freetrade.MI <- mice(freetrade, m=5, maxit=10, method="rf")
+freetrade.MI <- mice(freetrade, m=5, maxit=10, method="sample")
+#freetrade.MI <- mice(freetrade, m=5, maxit=10, method="cart")
+#freetrade.MI.copmlete <-complete(freetrade.MI, "long")   #Complete Imputed data
+
+str(freetrade.MI)
+
+
+freetrade.MI$chainMean
+freetrade.MI$chainVar
+
+plot(freetrade.MI)
+freetrade.MI.fit <- with(freetrade.MI,lm(tariff ~ year + country + polity + 
+                              pop + gdp.pc + intresmi + signed + fiveop + usheg))
+
+
+```
+
+```{r, include=FALSE}
+summary(pool(freetrade.MI.fit))
+sf.c <- summary(freetrade.MI.fit)
+coef.c <- sf.c[[4]]
+```
+
+###(d)
+```{r, include=FALSE}
+coeficient <- data.frame(coef.a[,1], coef.b[,1])
+summary(freetrade.LD.fit)
+summary(freetrade.mimp.fit)
+summary(pool(freetrade.MI.fit))
+
+```
+
+The "listwise deletion"" produces best fit for the data though with very low degrees of freedom.For pooled regression using multiple imputation, the countries Korea and Pakistan, Polity and gdp.pc have the most significant coefficients.For pooled regression using single imputation, the countries Pakistan and Thailand, Polity and fiveop have the most significant coefficients.
+Also,As can be seen by using mean imputation the coeficient would not be changed. However, the coeficient of mice is highly related to the method we are choosing. Imputations based on the modeling use the model as a prediction. They may add some noises to the predicted value, but the reality is that those values are not the missing valuse.I would say **listwise** deletion showed the best results amoung the other methods. Therefore, I would suggest to use this method instead of imputation.
+
+##Problem 3: House Price Data :
+```{r}
+housing <- read.csv("housingData.csv")
+```
+
+###(a) Transform or construct 
+find the variables that have missing inputs.
+```{r}
+na_cols <- which(colSums(is.na(housing)) > 0)
+sort(colSums(sapply(housing[na_cols], is.na)), decreasing = TRUE)
+```
+Te result shows that the PoolQC feature has a whopping 998 NAs, signifying that these 998 houses do not have a pool. For other features such as Electrical and MasVnrtype or MasVnArea, they only have a few missing inputs with no explanation as to why they are missing, so it’s likely that its just an input error. For those features, the most common input is filled in.
+
+Check the nearzero variance
+```{r, include= FALSE}
+
+nearZeroVar(housing,saveMetrics=T)
+```
+
+###Transformation some variable by using collapse function and getting log
+```{r}
+
+housing$LotShape<-fct_collapse(housing$LotShape, Reg=c("Reg"),IrReg=c("IR1","IR2","IR3"))
+housing$Functional<-fct_collapse(housing$Functional,Type=c("Typ"),deduct=c("Min1","Min2","Mod","Maj1","Maj2"))
+housing$Saleprice<-log(housing$SalePrice)
+housing$YearBuilt <- log(housing$YearBuilt)
+housing$LotFrontage <- log(housing$LotFrontage)
+ 
+```
+
+###Deleting variable which has so many missing value or redundant variable
+```{r}
+housing$Alley <-NULL
+housing$PoolQC <- NULL
+housing$MiscFeature <- NULL
+housing$Fence <- NULL
+housing$BsmtQual <- NULL
+housing$Exterior1st <- NULL
+housing$ExterQual <- NULL
+```
+
+###Converiting some categorical to numerical for feature engeering
+```{r}
+housing$OverallQual <- as.numeric(housing$OverallQual)
+housing$OverallCond <- as.numeric(housing$OverallCond)
+housing$GarageCond <- as.numeric(housing$GarageCond)
+housing$GarageQual <- as.numeric(housing$GarageQual)
+housing$BsmtFinType1 <- as.numeric(housing$BsmtFinType1)
+housing$BsmtFinType2 <- as.numeric(housing$BsmtFinType2)
+```
+
+###Combine some variables that have the same concept with each other through multypling or summing them
+```{r}
+housing$OverallGrade <- (housing$OverallQual) * (housing$OverallCond)
+housing$GarageGrade <- (housing$GarageQual) * (housing$GarageCond)
+housing$BasementRating <- (housing$BsmtFinType1) * (housing$BsmtFinType2)
+housing$TotalBath <- (housing$BsmtFullBath) + (0.5 * housing$BsmtHalfBath) + (housing$FullBath) + (0.5 * housing$HalfBath)
+housing$TotalSF <- (housing$TotalBsmtSF) + (housing$BsmtFinSF1) + (housing$BsmtFinSF2)+ (housing$X1stFlrSF) + (housing$X2ndFlrSF)
+housing$TotalPorchSF <- (housing$OpenPorchSF) + (housing$EncPorchSF)
+
+housing <- housing[,-c(14,15,26,27,28,29,30,35,36,39,40,41,42,59,60)]
+
+```
+
+##(b) Jutify the choices made in feature engineering
+For feature engineering first I tryied to find missing Value and check the nearzero variannce then decide to delete some variable like"Fence","PoolQc","Alley" and "Miscfeature" beacuse of the majorty of their data was not avalilabe. Then convert some categorical variable to numeric for better result of feature enginerring and construct new variable. After that I tried to multyple or sume some varibale of the data set which has they repeated alot like variables taht have both related to each other and have same condtion and quality. Or sum variable to gain the totall. Also I got log from some variable to make them like normal ditribution and collapse some variable beacuse they have many uninformative Level. All I did help to better undrestand the data by deleting,reduceing or combining unnececery vaiable.
+below you can seen that how some variable by getting log their distribution changed
+```{r}
+par(mfrow=c(1,3))
+hist(log(housing$Saleprice))
+hist(log(housing$LotFrontage))
+hist(log(housing$SalePrice))
+```
+
+
+
